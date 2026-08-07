@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Edit PDF text locally in your browser and download the result." />
+  <title>Free PDF Editor</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div><h1>Free PDF Editor</h1><p>Your document stays in your browser.</p></div>
+      <div class="top-actions">
+        <label class="button secondary">Open PDF<input id="openPdfTop" type="file" accept="application/pdf,.pdf" hidden /></label>
+        <button id="downloadButton" class="button primary" disabled>Download PDF</button>
+      </div>
+    </header>
+    <div id="error" class="error hidden" role="alert"></div>
+
+    <section id="welcome" class="welcome">
+      <div class="upload-card">
+        <div class="document-icon">PDF</div>
+        <h2>Edit PDF text for free</h2>
+        <p>Upload a PDF, place replacement text over the original, and download the finished document.</p>
+        <label class="button primary large">Choose a PDF<input id="openPdfWelcome" type="file" accept="application/pdf,.pdf" hidden /></label>
+        <small>No account, database, or server upload required.</small>
+      </div>
+    </section>
+
+    <section id="workspace" class="workspace hidden">
+      <aside class="sidebar pages-panel"><h2>Pages</h2><div id="thumbnailList" class="thumbnail-list"></div></aside>
+      <div class="editor-column">
+        <div class="toolbar">
+          <button id="addTextButton" class="button secondary">+ Add text</button>
+          <button id="deleteButton" class="button danger" disabled>Delete</button>
+          <label>Zoom<select id="zoomSelect"><option value="0.6">60%</option><option value="0.8">80%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option></select></label>
+          <span id="pageCount" class="page-count"></span>
+        </div>
+        <div id="pageStage" class="page-stage"><div id="pageCanvas" class="page-canvas"></div></div>
+      </div>
+      <aside class="sidebar properties-panel">
+        <h2>Text properties</h2>
+        <div id="emptyProperties" class="empty-state">Select a text box or choose “Add text”.</div>
+        <div id="propertyForm" class="property-form hidden">
+          <label>Text<textarea id="textInput" rows="5"></textarea></label>
+          <div class="two-columns">
+            <label>Font size<input id="fontSizeInput" type="number" min="6" max="96" /></label>
+            <label>Text colour<input id="textColorInput" type="color" /></label>
+          </div>
+          <div class="two-columns">
+            <label>Width<input id="widthInput" type="number" min="20" /></label>
+            <label>Height<input id="heightInput" type="number" min="10" /></label>
+          </div>
+          <label class="checkbox-row"><input id="coverInput" type="checkbox" />Cover original content</label>
+          <label id="coverColorLabel">Cover colour<input id="coverColorInput" type="color" /></label>
+          <p class="hint">Drag the text box into position. Adjust its width and height to cover the original text.</p>
+        </div>
+      </aside>
+    </section>
+
+    <div id="busyOverlay" class="busy-overlay hidden"><div class="spinner"></div><span>Processing PDF…</span></div>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

@@ -299,7 +299,7 @@ async function makeTextPng(edit, pixelScale = 3) {
 async function savePdf() {
   if (!state.pdfBytes) return; setBusy(true); showError();
   try {
-    const document = await PDFDocument.load(state.pdfBytes.slice()); const pdfPages = document.getPages();
+    const pdfDoc = await PDFDocument.load(state.pdfBytes.slice()); const pdfPages = pdfDoc.getPages();
     const fontCache = new Map();
     for (const edit of state.edits) {
       const page = pdfPages[edit.pageIndex], preview = state.pages[edit.pageIndex]; if (!page || !preview) continue;
@@ -311,7 +311,7 @@ async function savePdf() {
       const c = hexToRgb(edit.color), size = edit.fontSize * yScale;
       if (isStandardLike(edit)) {
         const fontKey = chooseStandardFont(edit);
-        if (!fontCache.has(fontKey)) fontCache.set(fontKey, await document.embedFont(fontKey));
+        if (!fontCache.has(fontKey)) fontCache.set(fontKey, await pdfDoc.embedFont(fontKey));
         const font = fontCache.get(fontKey);
         edit.text.split(/\r?\n/).forEach((line, index) => page.drawText(line, {
           x: x + 1 * xScale, y: y + height - size - index * size * 1.08,
@@ -320,11 +320,11 @@ async function savePdf() {
       } else {
         // For non-standard/embedded fonts, render with the detected browser font to preserve appearance as closely as possible.
         const pngBytes = await makeTextPng(edit);
-        const png = await document.embedPng(pngBytes);
+        const png = await pdfDoc.embedPng(pngBytes);
         page.drawImage(png, { x, y, width, height });
       }
     }
-    const bytes = await document.save(); const blob = new Blob([bytes], { type: 'application/pdf' }); const url = URL.createObjectURL(blob);
+    const bytes = await pdfDoc.save(); const blob = new Blob([bytes], { type: 'application/pdf' }); const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a'); anchor.href = url; anchor.download = state.fileName; document.body.appendChild(anchor); anchor.click(); anchor.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   } catch (error) { showError(error instanceof Error ? error.message : 'Unable to save this PDF.'); }

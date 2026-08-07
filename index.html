@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Edit PDF text locally in your browser and download the result." />
+  <meta name="description" content="Edit existing PDF text locally in your browser and download the result." />
   <title>Free PDF Editor</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
@@ -21,8 +21,8 @@
     <section id="welcome" class="welcome">
       <div class="upload-card">
         <div class="document-icon">PDF</div>
-        <h2>Edit PDF text for free</h2>
-        <p>Upload a PDF, place replacement text over the original, and download the finished document.</p>
+        <h2>Edit existing PDF text</h2>
+        <p>Upload a PDF, click existing text to edit it, match its detected formatting, then download the finished document.</p>
         <label class="button primary large">Choose a PDF<input id="openPdfWelcome" type="file" accept="application/pdf,.pdf" hidden /></label>
         <small>No account, database, or server upload required.</small>
       </div>
@@ -33,28 +33,32 @@
       <div class="editor-column">
         <div class="toolbar">
           <button id="addTextButton" class="button secondary">+ Add text</button>
-          <button id="deleteButton" class="button danger" disabled>Delete</button>
+          <button id="deleteButton" class="button danger" disabled>Undo selected edit</button>
           <label>Zoom<select id="zoomSelect"><option value="0.6">60%</option><option value="0.8">80%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option></select></label>
+          <span class="click-tip">Tip: click existing text to edit it</span>
           <span id="pageCount" class="page-count"></span>
         </div>
         <div id="pageStage" class="page-stage"><div id="pageCanvas" class="page-canvas"></div></div>
       </div>
       <aside class="sidebar properties-panel">
         <h2>Text properties</h2>
-        <div id="emptyProperties" class="empty-state">Select a text box or choose “Add text”.</div>
+        <div id="emptyProperties" class="empty-state">Click text already in the PDF, or choose “Add text”.</div>
         <div id="propertyForm" class="property-form hidden">
+          <div id="sourceInfo" class="source-info"></div>
           <label>Text<textarea id="textInput" rows="5"></textarea></label>
+          <label>Detected font<input id="fontFamilyInput" type="text" /></label>
           <div class="two-columns">
-            <label>Font size<input id="fontSizeInput" type="number" min="6" max="96" /></label>
+            <label>Font size<input id="fontSizeInput" type="number" min="4" max="160" step="0.1" /></label>
             <label>Text colour<input id="textColorInput" type="color" /></label>
           </div>
+          <div class="font-style-row"><span>Detected style</span><strong id="fontStyleValue">Regular</strong></div>
           <div class="two-columns">
             <label>Width<input id="widthInput" type="number" min="20" /></label>
             <label>Height<input id="heightInput" type="number" min="10" /></label>
           </div>
           <label class="checkbox-row"><input id="coverInput" type="checkbox" />Cover original content</label>
-          <label id="coverColorLabel">Cover colour<input id="coverColorInput" type="color" /></label>
-          <p class="hint">Drag the text box into position. Adjust its width and height to cover the original text.</p>
+          <label id="coverColorLabel">Detected background<input id="coverColorInput" type="color" /></label>
+          <p class="hint">Double-click replacement text on the page to type directly into it. Drag it if you need to fine-tune the position.</p>
         </div>
       </aside>
     </section>

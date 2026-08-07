@@ -1,29 +1,23 @@
-# Free PDF Editor MVP
+# Free PDF Editor v2
 
-A no-build, browser-only PDF editor ready for Azure Static Web Apps.
+A browser-only PDF editor for Azure Static Web Apps.
 
-## Features
-- Upload and preview multi-page PDFs
-- Add replacement text boxes
-- Cover original text with a chosen background colour
-- Drag text into place
-- Change text, size, colour, width and height
-- Download the edited PDF
-- Files remain in the browser
+## v2 features
+- Upload and render multi-page PDFs with PDF.js.
+- Detect selectable existing text from the PDF text layer.
+- Click existing text to create an in-place replacement automatically.
+- Preserve detected position, font size, font family hint, bold/italic hint and sampled text/background colours.
+- Double-click replacement text to edit directly on the page.
+- Add new text manually.
+- Drag/resize replacement areas from the properties panel.
+- Download the edited PDF locally using pdf-lib.
 
-## Run locally
-Use a local web server (ES modules do not work reliably from `file://`):
+## Important font note
+PDFs may contain subset/embedded fonts that cannot be re-used directly by pdf-lib. The editor maps common fonts to PDF standard fonts. For non-standard detected fonts, it renders the replacement as a high-resolution image using the closest browser-available family to preserve visual appearance.
 
-```bash
-python -m http.server 8080
-```
-Then open `http://localhost:8080`.
-
-## Azure Static Web Apps
-Upload these files to a GitHub repository and create an Azure Static Web App with:
-- App location: `/`
-- API location: blank
-- Output location: blank
-
-## Limitation
-This version visually replaces text by covering the original area and adding new text. It does not reconstruct arbitrary original PDF text objects. Scanned PDFs will need OCR later.
+## Deploy
+This project is plain static HTML/CSS/JS. For Azure Static Web Apps with GitHub Actions use:
+- `app_location: "/"`
+- `api_location: ""`
+- `output_location: ""`
+- `skip_app_build: true`

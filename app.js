@@ -1,5 +1,7 @@
-import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.1.200/build/pdf.mjs';
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.1.200/build/pdf.worker.mjs';
+// iOS-compatible build: use the classic PDF.js 3.x browser bundle.
+const pdfjsLib = window.pdfjsLib;
+if (!pdfjsLib) throw new Error('PDF.js failed to load.');
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 
 const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
 const state = {
@@ -44,7 +46,7 @@ function getRenderZoom(page) {
   return state.zoom;
 }
 function selectedEdit() { return state.edits.find((edit) => edit.id === state.selectedId) || null; }
-function makeId() { return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`; }
+function makeId() { return (window.crypto && typeof window.crypto.randomUUID === 'function') ? window.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
 function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 function hexToRgb(hex) {
   const n = Number.parseInt(hex.replace('#', ''), 16);
@@ -111,8 +113,7 @@ async function loadPdf(file) {
   if (!file) return;
   setBusy(true); showError(); showNotice();
   try {
-    state.pages.forEach((page) => URL.revokeObjectURL(page.imageUrl));
-    const bytes = new Uint8Array(await file.arrayBuffer());
+    const bytes = new Uint8Array(await readBlobAsArrayBuffer(file));
     const pdf = await pdfjsLib.getDocument({ data: bytes.slice(), useSystemFonts: true }).promise;
     const pages = [];
     state.sourceIndex.clear();
@@ -150,8 +151,8 @@ async function loadPdf(file) {
         state.sourceIndex.set(sourceId, textItem);
       });
 
-      const blob = await new Promise((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error('Could not render page.')), 'image/png'));
-      pages.push({ width: viewport.width, height: viewport.height, imageUrl: URL.createObjectURL(blob), textItems });
+      const imageUrl = canvas.toDataURL('image/png');
+      pages.push({ width: viewport.width, height: viewport.height, imageUrl, textItems });
     }
 
     state.pdfBytes = bytes; state.pages = pages; state.pageIndex = 0; state.edits = []; state.selectedId = null;
@@ -316,13 +317,27 @@ function isStandardLike(edit) {
   return /(arial|helvetica|times|serif|courier|mono|consolas|georgia|cambria|garamond)/i.test(edit.fontFamily || '');
 }
 
+function readBlobAsArrayBuffer(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('Could not read file.'));
+    reader.readAsArrayBuffer(blob);
+  });
+}
+
+function dataUrlToBytes(dataUrl) {
+  const comma = dataUrl.indexOf(',');
+  const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
 async function canvasToPngBytes(canvas) {
-  if (typeof canvas.toBlob === 'function') {
-    const blob = await new Promise((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error('Could not render image.')), 'image/png'));
-    return new Uint8Array(await blob.arrayBuffer());
-  }
-  const response = await fetch(canvas.toDataURL('image/png'));
-  return new Uint8Array(await response.arrayBuffer());
+  // Avoid Blob.arrayBuffer()/ReadableStream paths that fail on some iOS Safari versions.
+  return dataUrlToBytes(canvas.toDataURL('image/png'));
 }
 
 async function makeTextPng(edit, pixelScale = 3) {
@@ -397,7 +412,7 @@ async function savePdf() {
 
     if (isIOSDevice()) {
       if (iosPreviewWindow && !iosPreviewWindow.closed) {
-        iosPreviewWindow.location.replace(url);
+        iosPreviewWindow.location.href = url;
         showNotice('Finished PDF opened in a new tab. On iPhone/iPad, tap Share and choose “Save to Files”.');
       } else {
         // Popup was blocked: provide a real link that the user can tap manually.
@@ -417,7 +432,8 @@ async function savePdf() {
     }
   } catch (error) {
     if (iosPreviewWindow && !iosPreviewWindow.closed) iosPreviewWindow.close();
-    showError(error instanceof Error ? error.message : 'Unable to save this PDF.');
+    const message = error && error.message ? error.message : String(error || 'Unable to save this PDF.');
+    showError(message);
   } finally {
     setBusy(false);
   }

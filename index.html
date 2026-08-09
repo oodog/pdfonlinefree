@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Edit existing PDF text locally in your browser and download the result." />
   <title>Free PDF Editor</title>
-  <link rel="stylesheet" href="./styles.css?v=3.0.0" />
+  <link rel="stylesheet" href="./styles.css?v=4.0.0" />
 </head>
 <body>
   <main class="app-shell">
@@ -17,7 +17,6 @@
       </div>
     </header>
     <div id="error" class="error hidden" role="alert"></div>
-    <div id="downloadNotice" class="download-notice hidden" role="status"></div>
 
     <section id="welcome" class="welcome">
       <div class="upload-card">
@@ -33,12 +32,10 @@
       <aside class="sidebar pages-panel"><h2>Pages</h2><div id="thumbnailList" class="thumbnail-list"></div></aside>
       <div class="editor-column">
         <div class="toolbar">
-          <button id="prevPageButton" class="button secondary page-nav" disabled>← Prev</button>
-          <button id="nextPageButton" class="button secondary page-nav" disabled>Next →</button>
           <button id="addTextButton" class="button secondary">+ Add text</button>
           <button id="deleteButton" class="button danger" disabled>Undo selected edit</button>
           <label>Zoom<select id="zoomSelect"><option value="0.6">60%</option><option value="0.8">80%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option></select></label>
-          <span class="click-tip">Tip: click or tap existing text to edit it</span>
+          <span class="click-tip">Tip: click existing text to edit it</span>
           <span id="pageCount" class="page-count"></span>
         </div>
         <div id="pageStage" class="page-stage"><div id="pageCanvas" class="page-canvas"></div></div>
@@ -61,14 +58,15 @@
           </div>
           <label class="checkbox-row"><input id="coverInput" type="checkbox" />Cover original content</label>
           <label id="coverColorLabel">Detected background<input id="coverColorInput" type="color" /></label>
-          <p class="hint">Desktop: double-click replacement text to type directly. iPhone/iPad: edit using the Text box above, and drag the replacement with one finger to fine-tune its position.</p>
+          <p class="hint">Double-click replacement text on the page to type directly into it. Drag it if you need to fine-tune the position.</p>
         </div>
       </aside>
     </section>
 
     <div id="busyOverlay" class="busy-overlay hidden"><div class="spinner"></div><span>Processing PDF…</span></div>
   </main>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-  <script type="module" src="./app.js?v=3.0.0"></script>
+  <script src="./app.js?v=4.0.0"></script>
 </body>
 </html>

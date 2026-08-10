@@ -13,7 +13,10 @@ const state = {
   renderZoom: 1,
   edits: [],
   selectedId: null,
-  sourceIndex: new Map()
+  sourceIndex: new Map(),
+  pdfProxy: null,
+  pagePreparing: new Map(),
+  renderGeneration: 0
 };
 
 const $ = (id) => window.document.getElementById(id);
@@ -114,68 +117,162 @@ async function loadPdf(file) {
   setBusy(true); showError(); showNotice();
   try {
     const bytes = new Uint8Array(await readBlobAsArrayBuffer(file));
-    const pdf = await pdfjsLib.getDocument({ data: bytes.slice(), useSystemFonts: true }).promise;
-    const pages = [];
+    if (!bytes.length) throw new Error('The selected PDF is empty.');
+
+    // Keep the original bytes for export and give PDF.js its own copy.
+    // Only page 1 is rendered during opening; other pages are prepared on demand.
+    const loadingTask = pdfjsLib.getDocument({
+      data: bytes.slice(),
+      useSystemFonts: true,
+      isEvalSupported: false
+    });
+    const pdf = await loadingTask.promise;
+
+    state.pdfBytes = bytes;
+    state.pdfProxy = pdf;
+    state.pages = Array.from({ length: pdf.numPages }, (_, index) => ({
+      number: index + 1,
+      width: 612,
+      height: 792,
+      imageUrl: '',
+      textItems: [],
+      prepared: false
+    }));
+    state.pageIndex = 0;
+    state.edits = [];
+    state.selectedId = null;
     state.sourceIndex.clear();
-
-    for (let number = 1; number <= pdf.numPages; number += 1) {
-      const page = await pdf.getPage(number);
-      const viewport = page.getViewport({ scale: 1.5 });
-      const canvas = window.document.createElement('canvas');
-      const context = canvas.getContext('2d', { willReadFrequently: true });
-      canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
-      await page.render({ canvasContext: context, viewport, canvas }).promise;
-
-      const textContent = await page.getTextContent();
-      const textItems = [];
-      textContent.items.forEach((item, itemIndex) => {
-        if (!('str' in item) || !item.str || !item.str.trim()) return;
-        const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
-        const style = textContent.styles?.[item.fontName] || {};
-        const fontHeight = Math.max(6, Math.hypot(tx[2], tx[3]));
-        const ascent = typeof style.ascent === 'number' ? style.ascent : (typeof style.descent === 'number' ? 1 + style.descent : .8);
-        const top = tx[5] - fontHeight * ascent;
-        const left = tx[4];
-        const width = Math.max(4, Math.abs(item.width || 0) * viewport.scale);
-        const height = Math.max(fontHeight * 1.12, 8);
-        const family = normaliseFamily(style.fontFamily || item.fontName || 'Arial');
-        const traits = fontTraits(item.fontName, family);
-        const sourceId = `p${number - 1}-t${itemIndex}`;
-        const textItem = {
-          sourceId, text: item.str, x: left, y: top, width, height,
-          fontSize: fontHeight, fontFamily: family, bold: traits.bold, italic: traits.italic,
-          color: sampleInkColor(context, left, top, width, height),
-          backgroundColor: sampleBackgroundColor(context, left, top, width, height)
-        };
-        textItems.push(textItem);
-        state.sourceIndex.set(sourceId, textItem);
-      });
-
-      const imageUrl = canvas.toDataURL('image/png');
-      pages.push({ width: viewport.width, height: viewport.height, imageUrl, textItems });
-    }
-
-    state.pdfBytes = bytes; state.pages = pages; state.pageIndex = 0; state.edits = []; state.selectedId = null;
+    state.pagePreparing.clear();
     state.fileName = `${file.name.replace(/\.pdf$/i, '')}-edited.pdf`;
-    elements.welcome.classList.add('hidden'); elements.workspace.classList.remove('hidden'); elements.download.disabled = false;
+
+    elements.welcome.classList.add('hidden');
+    elements.workspace.classList.remove('hidden');
+    elements.download.disabled = false;
+
+    // This is the key mobile fix: don't render every page before showing the editor.
+    await preparePage(0);
     renderAll();
-  } catch (error) { showError(error instanceof Error ? error.message : 'Unable to open this PDF.'); }
-  finally { setBusy(false); elements.openTop.value = ''; elements.openWelcome.value = ''; }
+  } catch (error) {
+    console.error(error);
+    showError(error instanceof Error ? error.message : 'Unable to open this PDF.');
+    elements.welcome.classList.remove('hidden');
+    elements.workspace.classList.add('hidden');
+    elements.download.disabled = true;
+  } finally {
+    setBusy(false);
+    elements.openTop.value = '';
+    elements.openWelcome.value = '';
+  }
+}
+
+async function preparePage(index) {
+  const existing = state.pages[index];
+  if (!existing || existing.prepared) return existing;
+  if (!state.pdfProxy) throw new Error('PDF is not loaded.');
+  if (state.pagePreparing.has(index)) return state.pagePreparing.get(index);
+
+  const promise = (async () => {
+    const page = await state.pdfProxy.getPage(index + 1);
+
+    // 1.25 keeps text hitboxes accurate while avoiding huge canvases on iPhone.
+    const viewport = page.getViewport({ scale: 1.25 });
+    const maxPixels = isIOSDevice() ? 5_000_000 : 9_000_000;
+    const rawPixels = viewport.width * viewport.height;
+    const safetyScale = rawPixels > maxPixels ? Math.sqrt(maxPixels / rawPixels) : 1;
+    const renderViewport = safetyScale < 1 ? page.getViewport({ scale: 1.25 * safetyScale }) : viewport;
+
+    const canvas = window.document.createElement('canvas');
+    const context = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
+    if (!context) throw new Error('Your browser could not create the PDF canvas.');
+    canvas.width = Math.max(1, Math.ceil(renderViewport.width));
+    canvas.height = Math.max(1, Math.ceil(renderViewport.height));
+
+    await page.render({ canvasContext: context, viewport: renderViewport }).promise;
+    const textContent = await page.getTextContent();
+    const textItems = [];
+
+    textContent.items.forEach((item, itemIndex) => {
+      if (!item || typeof item.str !== 'string' || !item.str.trim()) return;
+      const tx = pdfjsLib.Util.transform(renderViewport.transform, item.transform);
+      const style = (textContent.styles && textContent.styles[item.fontName]) || {};
+      const fontHeight = Math.max(6, Math.hypot(tx[2], tx[3]));
+      const ascent = typeof style.ascent === 'number' ? style.ascent : (typeof style.descent === 'number' ? 1 + style.descent : .8);
+      const top = tx[5] - fontHeight * ascent;
+      const left = tx[4];
+      const width = Math.max(4, Math.abs(item.width || 0) * renderViewport.scale);
+      const height = Math.max(fontHeight * 1.12, 8);
+      const family = normaliseFamily(style.fontFamily || item.fontName || 'Arial');
+      const traits = fontTraits(item.fontName, family);
+      const sourceId = `p${index}-t${itemIndex}`;
+      const textItem = {
+        sourceId, text: item.str, x: left, y: top, width, height,
+        fontSize: fontHeight, fontFamily: family, bold: traits.bold, italic: traits.italic,
+        color: sampleInkColor(context, left, top, width, height),
+        backgroundColor: sampleBackgroundColor(context, left, top, width, height)
+      };
+      textItems.push(textItem);
+      state.sourceIndex.set(sourceId, textItem);
+    });
+
+    existing.width = renderViewport.width;
+    existing.height = renderViewport.height;
+    existing.imageUrl = canvas.toDataURL('image/jpeg', 0.92);
+    existing.textItems = textItems;
+    existing.prepared = true;
+
+    // Release the large backing store as soon as we've made the display image.
+    canvas.width = 1;
+    canvas.height = 1;
+    try { page.cleanup(); } catch {}
+    return existing;
+  })();
+
+  state.pagePreparing.set(index, promise);
+  try { return await promise; }
+  finally { state.pagePreparing.delete(index); }
+}
+
+async function goToPage(index) {
+  if (index < 0 || index >= state.pages.length || index === state.pageIndex && state.pages[index]?.prepared) return;
+  setBusy(true); showError();
+  try {
+    await preparePage(index);
+    state.pageIndex = index;
+    state.selectedId = null;
+    renderAll();
+  } catch (error) {
+    console.error(error);
+    showError(error instanceof Error ? error.message : 'Unable to render this PDF page.');
+  } finally { setBusy(false); }
 }
 
 function renderAll() { renderThumbnails(); renderPage(); renderProperties(); }
 function renderThumbnails() {
   elements.thumbnails.replaceChildren();
   state.pages.forEach((page, index) => {
-    const button = window.document.createElement('button'); button.className = `thumbnail${index === state.pageIndex ? ' active' : ''}`;
-    button.innerHTML = `<img src="${page.imageUrl}" alt="Page ${index + 1}"><span>Page ${index + 1}</span>`;
-    button.addEventListener('click', () => { state.pageIndex = index; state.selectedId = null; renderAll(); });
+    const button = window.document.createElement('button');
+    button.className = `thumbnail${index === state.pageIndex ? ' active' : ''}`;
+    if (page.prepared && page.imageUrl) {
+      const img = window.document.createElement('img');
+      img.src = page.imageUrl;
+      img.alt = `Page ${index + 1}`;
+      button.appendChild(img);
+    } else {
+      const placeholder = window.document.createElement('div');
+      placeholder.className = 'thumbnail-placeholder';
+      placeholder.textContent = `${index + 1}`;
+      button.appendChild(placeholder);
+    }
+    const label = window.document.createElement('span');
+    label.textContent = `Page ${index + 1}`;
+    button.appendChild(label);
+    button.addEventListener('click', () => { void goToPage(index); });
     elements.thumbnails.appendChild(button);
   });
 }
 
 function renderPage() {
-  const page = state.pages[state.pageIndex]; if (!page) return;
+  const page = state.pages[state.pageIndex]; if (!page || !page.prepared) return;
   elements.pageCount.textContent = `Page ${state.pageIndex + 1} of ${state.pages.length}`;
   elements.prevPage.disabled = state.pageIndex <= 0;
   elements.nextPage.disabled = state.pageIndex >= state.pages.length - 1;
@@ -442,8 +539,8 @@ async function savePdf() {
 elements.openTop.addEventListener('change', (event) => loadPdf(event.target.files?.[0]));
 elements.openWelcome.addEventListener('change', (event) => loadPdf(event.target.files?.[0]));
 elements.download.addEventListener('click', savePdf); elements.addText.addEventListener('click', addText); elements.delete.addEventListener('click', deleteSelected);
-elements.prevPage.addEventListener('click', () => { if (state.pageIndex > 0) { state.pageIndex -= 1; state.selectedId = null; renderAll(); } });
-elements.nextPage.addEventListener('click', () => { if (state.pageIndex < state.pages.length - 1) { state.pageIndex += 1; state.selectedId = null; renderAll(); } });
+elements.prevPage.addEventListener('click', () => { if (state.pageIndex > 0) void goToPage(state.pageIndex - 1); });
+elements.nextPage.addEventListener('click', () => { if (state.pageIndex < state.pages.length - 1) void goToPage(state.pageIndex + 1); });
 elements.zoom.addEventListener('change', () => { state.zoom = Number(elements.zoom.value); renderPage(); });
 elements.pageStage.addEventListener('click', () => { state.selectedId = null; renderPage(); renderProperties(); });
 elements.text.addEventListener('input', () => updateSelected({ text: elements.text.value }));

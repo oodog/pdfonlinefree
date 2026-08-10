@@ -47,3 +47,5 @@
   .toolbar label{order:5}
   .page-count{order:6}
 }
+
+.thumbnail-placeholder{aspect-ratio:.77;background:#fff;border:1px solid #d8dee7;display:grid;place-items:center;font-weight:800;font-size:22px;color:#94a3b8}

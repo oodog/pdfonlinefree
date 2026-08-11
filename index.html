@@ -2,51 +2,75 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Edit existing PDF text locally in your browser and download the result." />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="description" content="Edit existing PDF text locally in your browser and download the finished PDF." />
   <title>Free PDF Editor</title>
-  <link rel="stylesheet" href="./styles.css?v=7.0.0" />
+  <link rel="stylesheet" href="./styles-universal-v1.css" />
 </head>
 <body>
   <main class="app-shell">
     <header class="topbar">
-      <div><h1>Free PDF Editor</h1><p>Your document stays in your browser.</p></div>
+      <div class="brand">
+        <h1>Free PDF Editor</h1>
+        <p>Your document stays in your browser.</p>
+      </div>
       <div class="top-actions">
         <label class="button secondary">Open PDF<input id="openPdfTop" type="file" accept="application/pdf,.pdf" hidden /></label>
         <button id="downloadButton" class="button primary" disabled>Download PDF</button>
       </div>
     </header>
+
     <div id="error" class="error hidden" role="alert"></div>
+    <div id="status" class="status hidden" aria-live="polite"></div>
 
     <section id="welcome" class="welcome">
       <div class="upload-card">
         <div class="document-icon">PDF</div>
         <h2>Edit existing PDF text</h2>
-        <p>Upload a PDF, click existing text to edit it, match its detected formatting, then download the finished document.</p>
+        <p>Choose a PDF, tap or click existing text, replace it, then save the edited PDF.</p>
         <label class="button primary large">Choose a PDF<input id="openPdfWelcome" type="file" accept="application/pdf,.pdf" hidden /></label>
-        <small>No account, database, or server upload required.</small>
+        <small>No account or server upload required.</small>
       </div>
     </section>
 
     <section id="workspace" class="workspace hidden">
-      <aside class="sidebar pages-panel"><h2>Pages</h2><div id="thumbnailList" class="thumbnail-list"></div></aside>
+      <aside class="sidebar pages-panel">
+        <h2>Pages</h2>
+        <div id="thumbnailList" class="thumbnail-list"></div>
+      </aside>
+
       <div class="editor-column">
         <div class="toolbar">
+          <button id="prevPageButton" class="button secondary mobile-page-button" disabled>←</button>
+          <button id="nextPageButton" class="button secondary mobile-page-button" disabled>→</button>
           <button id="addTextButton" class="button secondary">+ Add text</button>
           <button id="deleteButton" class="button danger" disabled>Undo selected edit</button>
-          <label>Zoom<select id="zoomSelect"><option value="0.6">60%</option><option value="0.8">80%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option></select></label>
-          <span class="click-tip">Tip: click existing text to edit it</span>
+          <label class="zoom-control">Zoom
+            <select id="zoomSelect">
+              <option value="fit" selected>Fit</option>
+              <option value="0.6">60%</option>
+              <option value="0.8">80%</option>
+              <option value="1">100%</option>
+              <option value="1.25">125%</option>
+              <option value="1.5">150%</option>
+            </select>
+          </label>
+          <span class="click-tip">Tap/click existing text to edit it</span>
           <span id="pageCount" class="page-count"></span>
         </div>
-        <div id="pageStage" class="page-stage"><div id="pageCanvas" class="page-canvas"></div></div>
+        <div id="pageStage" class="page-stage">
+          <div id="pageCanvas" class="page-canvas"></div>
+        </div>
       </div>
+
       <aside class="sidebar properties-panel">
         <h2>Text properties</h2>
-        <div id="emptyProperties" class="empty-state">Click text already in the PDF, or choose “Add text”.</div>
+        <div id="emptyProperties" class="empty-state">Tap/click text already in the PDF, or choose “Add text”.</div>
         <div id="propertyForm" class="property-form hidden">
           <div id="sourceInfo" class="source-info"></div>
           <label>Text<textarea id="textInput" rows="5"></textarea></label>
-          <label>Detected font<input id="fontFamilyInput" type="text" /></label>
+          <label>Detected font<input id="fontFamilyInput" type="text" autocomplete="off" /></label>
           <div class="two-columns">
             <label>Font size<input id="fontSizeInput" type="number" min="4" max="160" step="0.1" /></label>
             <label>Text colour<input id="textColorInput" type="color" /></label>
@@ -58,15 +82,23 @@
           </div>
           <label class="checkbox-row"><input id="coverInput" type="checkbox" />Cover original content</label>
           <label id="coverColorLabel">Detected background<input id="coverColorInput" type="color" /></label>
-          <p class="hint">Double-click replacement text on the page to type directly into it. Drag it if you need to fine-tune the position.</p>
+          <p class="hint">Use the text box above on phones. On desktop you can also double-click replacement text on the page and type directly.</p>
         </div>
       </aside>
     </section>
 
-    <div id="busyOverlay" class="busy-overlay hidden"><div class="spinner"></div><span>Processing PDF…</span></div>
+    <div class="download-fallback-wrap"><a id="downloadFallback" class="button secondary hidden" href="#">Download again</a></div>
+
+    <div id="busyOverlay" class="busy-overlay hidden" role="status" aria-live="assertive">
+      <div class="busy-card">
+        <div class="spinner"></div>
+        <strong id="busyMessage">Processing PDF…</strong>
+      </div>
+    </div>
   </main>
-  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-  <script src="./app.js?v=7.0.0"></script>
+
+  <script src="./polyfills.js"></script>
+  <script src="./vendor/pdf-lib.min.js"></script>
+  <script type="module" src="./bootstrap.mjs"></script>
 </body>
 </html>

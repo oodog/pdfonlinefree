@@ -1,1 +1,42 @@
-{"navigationFallback":{"rewrite":"/index.html","exclude":["*.{css,js,png,jpg,jpeg,gif,svg,ico,pdf}"]},"globalHeaders":{"X-Content-Type-Options":"nosniff","Referrer-Policy":"strict-origin-when-cross-origin","Permissions-Policy":"camera=(), microphone=(), geolocation=()"}}
+{
+  "routes": [
+    {
+      "route": "/",
+      "headers": {
+        "Cache-Control": "no-store, no-cache, must-revalidate"
+      }
+    },
+    {
+      "route": "/index.html",
+      "headers": {
+        "Cache-Control": "no-store, no-cache, must-revalidate"
+      }
+    },
+    {
+      "route": "/app-universal.mjs",
+      "headers": {
+        "Cache-Control": "no-store, no-cache, must-revalidate"
+      }
+    },
+    {
+      "route": "/bootstrap.mjs",
+      "headers": {
+        "Cache-Control": "no-store, no-cache, must-revalidate"
+      }
+    },
+    {
+      "route": "/polyfills.js",
+      "headers": {
+        "Cache-Control": "no-store, no-cache, must-revalidate"
+      }
+    }
+  ],
+  "mimeTypes": {
+    ".mjs": "text/javascript",
+    ".js": "text/javascript"
+  },
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/vendor/*", "/*.js", "/*.mjs", "/*.css", "/*.json"]
+  }
+}

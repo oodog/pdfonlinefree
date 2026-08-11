@@ -1,3 +1,7 @@
+# Free PDF Editor v6 – Worker Fix
+
+This build fixes PDF opening hangs by using a same-origin PDF.js worker bootstrap and adds startup/render timeouts. Upload all files in this folder to the repository root.
+
 # Free PDF Editor v5
 
 Static browser-based PDF editor for Azure Static Web Apps.

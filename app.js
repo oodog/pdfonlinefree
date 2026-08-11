@@ -1,7 +1,7 @@
 // iOS-compatible build: use the classic PDF.js 3.x browser bundle.
 const pdfjsLib = window.pdfjsLib;
 if (!pdfjsLib) throw new Error('PDF.js failed to load.');
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.bootstrap.js?v=6.0.0';
 
 const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
 const state = {
@@ -21,7 +21,7 @@ const state = {
 
 const $ = (id) => window.document.getElementById(id);
 const elements = {
-  welcome: $('welcome'), workspace: $('workspace'), error: $('error'), notice: $('downloadNotice'), busy: $('busyOverlay'),
+  welcome: $('welcome'), workspace: $('workspace'), error: $('error'), notice: $('downloadNotice'), busy: $('busyOverlay'), busyMessage: $('busyMessage'),
   openTop: $('openPdfTop'), openWelcome: $('openPdfWelcome'), download: $('downloadButton'),
   thumbnails: $('thumbnailList'), pageCanvas: $('pageCanvas'), pageStage: $('pageStage'), pageCount: $('pageCount'),
   addText: $('addTextButton'), delete: $('deleteButton'), zoom: $('zoomSelect'), prevPage: $('prevPageButton'), nextPage: $('nextPageButton'),
@@ -30,7 +30,13 @@ const elements = {
   cover: $('coverInput'), coverColor: $('coverColorInput'), coverColorLabel: $('coverColorLabel'), sourceInfo: $('sourceInfo')
 };
 
-function setBusy(value) { elements.busy.classList.toggle('hidden', !value); }
+function setBusy(value, message = 'Processing PDF…') { if (elements.busyMessage) elements.busyMessage.textContent = message; elements.busy.classList.toggle('hidden', !value); }
+function withTimeout(promise, ms, message) {
+  let timer;
+  const timeout = new Promise((_, reject) => { timer = window.setTimeout(() => reject(new Error(message)), ms); });
+  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timer));
+}
+
 function showError(message = '') { elements.error.textContent = message; elements.error.classList.toggle('hidden', !message); }
 function showNotice(message = '', html = '') {
   if (html) elements.notice.innerHTML = html; else elements.notice.textContent = message;
@@ -114,19 +120,20 @@ function sampleBackgroundColor(ctx, x, y, width, height) {
 
 async function loadPdf(file) {
   if (!file) return;
-  setBusy(true); showError(); showNotice();
+  setBusy(true, 'Reading PDF file…'); showError(); showNotice();
   try {
     const bytes = new Uint8Array(await readBlobAsArrayBuffer(file));
     if (!bytes.length) throw new Error('The selected PDF is empty.');
 
     // Keep the original bytes for export and give PDF.js its own copy.
     // Only page 1 is rendered during opening; other pages are prepared on demand.
+    setBusy(true, 'Starting PDF engine…');
     const loadingTask = pdfjsLib.getDocument({
       data: bytes.slice(),
       useSystemFonts: true,
       isEvalSupported: false
     });
-    const pdf = await loadingTask.promise;
+    const pdf = await withTimeout(loadingTask.promise, 20000, 'PDF engine did not start. The browser could not initialise the PDF.js worker.');
 
     state.pdfBytes = bytes;
     state.pdfProxy = pdf;
@@ -150,7 +157,8 @@ async function loadPdf(file) {
     elements.download.disabled = false;
 
     // This is the key mobile fix: don't render every page before showing the editor.
-    await preparePage(0);
+    setBusy(true, 'Rendering page 1…');
+    await withTimeout(preparePage(0), 30000, 'Page 1 took too long to render. Try a smaller PDF or another document.');
     renderAll();
   } catch (error) {
     console.error(error);
@@ -234,9 +242,9 @@ async function preparePage(index) {
 
 async function goToPage(index) {
   if (index < 0 || index >= state.pages.length || index === state.pageIndex && state.pages[index]?.prepared) return;
-  setBusy(true); showError();
+  setBusy(true, `Rendering page ${index + 1}…`); showError();
   try {
-    await preparePage(index);
+    await withTimeout(preparePage(index), 30000, `Page ${index + 1} took too long to render.`);
     state.pageIndex = index;
     state.selectedId = null;
     renderAll();

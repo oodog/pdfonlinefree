@@ -1,16 +1,19 @@
-# Free PDF Editor v6 – Worker Fix
+# Free PDF Editor v7 – Stable desktop + iPhone build
 
-This build fixes PDF opening hangs by using a same-origin PDF.js worker bootstrap and adds startup/render timeouts. Upload all files in this folder to the repository root.
+This build restores the working modern browser file-read path (`File.arrayBuffer()`), keeps PDF.js 3.11.174 for wider iPhone/Safari compatibility, and uses FileReader only as a fallback.
 
-# Free PDF Editor v5
+## Deploy
+Upload/replace these files at the root of your GitHub repository:
+- index.html
+- app.js
+- styles.css
+- staticwebapp.config.json
+- README.md
 
-Static browser-based PDF editor for Azure Static Web Apps.
+Keep your existing `.github/workflows` directory.
 
-## v5 changes
-- Fast/lazy PDF opening: only the current page is rendered initially.
-- Other pages render when selected.
-- Lower canvas memory usage for iPhone/iPad.
-- Existing-text overlay editing retained.
-- Desktop download and iPhone/iPad PDF preview/save retained.
-
-Upload these files to the root of the GitHub repository. Keep the existing `.github/workflows` folder.
+## Behaviour
+- Opens page 1 first; later pages render on demand.
+- Existing PDF text can be selected and replaced with overlays.
+- Desktop downloads the edited PDF.
+- iPhone/iPad opens the generated PDF for Share -> Save to Files.

@@ -1,7 +1,7 @@
 // iOS-compatible build: use the classic PDF.js 3.x browser bundle.
 const pdfjsLib = window.pdfjsLib;
 if (!pdfjsLib) throw new Error('PDF.js failed to load.');
-pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.bootstrap.js?v=6.0.0';
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 
 const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
 const state = {
@@ -21,7 +21,7 @@ const state = {
 
 const $ = (id) => window.document.getElementById(id);
 const elements = {
-  welcome: $('welcome'), workspace: $('workspace'), error: $('error'), notice: $('downloadNotice'), busy: $('busyOverlay'), busyMessage: $('busyMessage'),
+  welcome: $('welcome'), workspace: $('workspace'), error: $('error'), notice: $('downloadNotice'), busy: $('busyOverlay'),
   openTop: $('openPdfTop'), openWelcome: $('openPdfWelcome'), download: $('downloadButton'),
   thumbnails: $('thumbnailList'), pageCanvas: $('pageCanvas'), pageStage: $('pageStage'), pageCount: $('pageCount'),
   addText: $('addTextButton'), delete: $('deleteButton'), zoom: $('zoomSelect'), prevPage: $('prevPageButton'), nextPage: $('nextPageButton'),
@@ -30,13 +30,7 @@ const elements = {
   cover: $('coverInput'), coverColor: $('coverColorInput'), coverColorLabel: $('coverColorLabel'), sourceInfo: $('sourceInfo')
 };
 
-function setBusy(value, message = 'Processing PDF…') { if (elements.busyMessage) elements.busyMessage.textContent = message; elements.busy.classList.toggle('hidden', !value); }
-function withTimeout(promise, ms, message) {
-  let timer;
-  const timeout = new Promise((_, reject) => { timer = window.setTimeout(() => reject(new Error(message)), ms); });
-  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timer));
-}
-
+function setBusy(value) { elements.busy.classList.toggle('hidden', !value); }
 function showError(message = '') { elements.error.textContent = message; elements.error.classList.toggle('hidden', !message); }
 function showNotice(message = '', html = '') {
   if (html) elements.notice.innerHTML = html; else elements.notice.textContent = message;
@@ -122,7 +116,7 @@ async function loadPdf(file) {
   if (!file) return;
   setBusy(true, 'Reading PDF file…'); showError(); showNotice();
   try {
-    const bytes = new Uint8Array(await readBlobAsArrayBuffer(file));
+    const bytes = await readPdfFile(file);
     if (!bytes.length) throw new Error('The selected PDF is empty.');
 
     // Keep the original bytes for export and give PDF.js its own copy.
@@ -133,7 +127,11 @@ async function loadPdf(file) {
       useSystemFonts: true,
       isEvalSupported: false
     });
-    const pdf = await withTimeout(loadingTask.promise, 20000, 'PDF engine did not start. The browser could not initialise the PDF.js worker.');
+    const pdf = await withTimeout(
+      loadingTask.promise,
+      30000,
+      'PDF.js could not open this document within 30 seconds.'
+    );
 
     state.pdfBytes = bytes;
     state.pdfProxy = pdf;
@@ -158,7 +156,7 @@ async function loadPdf(file) {
 
     // This is the key mobile fix: don't render every page before showing the editor.
     setBusy(true, 'Rendering page 1…');
-    await withTimeout(preparePage(0), 30000, 'Page 1 took too long to render. Try a smaller PDF or another document.');
+    await withTimeout(preparePage(0), 30000, 'Page 1 took too long to render.');
     renderAll();
   } catch (error) {
     console.error(error);
@@ -242,9 +240,9 @@ async function preparePage(index) {
 
 async function goToPage(index) {
   if (index < 0 || index >= state.pages.length || index === state.pageIndex && state.pages[index]?.prepared) return;
-  setBusy(true, `Rendering page ${index + 1}…`); showError();
+  setBusy(true); showError();
   try {
-    await withTimeout(preparePage(index), 30000, `Page ${index + 1} took too long to render.`);
+    await preparePage(index);
     state.pageIndex = index;
     state.selectedId = null;
     renderAll();
@@ -422,13 +420,28 @@ function isStandardLike(edit) {
   return /(arial|helvetica|times|serif|courier|mono|consolas|georgia|cambria|garamond)/i.test(edit.fontFamily || '');
 }
 
-function readBlobAsArrayBuffer(blob) {
-  return new Promise((resolve, reject) => {
+async function readPdfFile(file) {
+  // Modern Chrome, Edge and Safari: this is the simplest and most reliable path.
+  // FileReader is retained only as a fallback for older Safari versions.
+  if (file && typeof file.arrayBuffer === 'function') {
+    const buffer = await withTimeout(
+      file.arrayBuffer(),
+      30000,
+      'The browser took too long to read this PDF file.'
+    );
+    return new Uint8Array(buffer);
+  }
+
+  return await withTimeout(new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error || new Error('Could not read file.'));
-    reader.readAsArrayBuffer(blob);
-  });
+    reader.onload = () => {
+      if (reader.result instanceof ArrayBuffer) resolve(new Uint8Array(reader.result));
+      else reject(new Error('The browser returned an invalid PDF file buffer.'));
+    };
+    reader.onerror = () => reject(reader.error || new Error('Could not read the selected PDF file.'));
+    reader.onabort = () => reject(new Error('Reading the PDF was cancelled.'));
+    reader.readAsArrayBuffer(file);
+  }), 30000, 'The browser took too long to read this PDF file.');
 }
 
 function dataUrlToBytes(dataUrl) {
